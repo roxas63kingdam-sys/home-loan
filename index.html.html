@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>住宅ローンシミュレータ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Noto Sans JP', sans-serif; background-color: #f3f4f6; }
+        .month-checkbox:checked + label {
+            background-color: #3b82f6; /* Tailwind blue-500 */
+            color: white;
+            border-color: #3b82f6;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+<div class="max-w-5xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden">
+    <div class="bg-blue-600 p-6 text-white text-center">
+        <h1 class="text-2xl md:text-3xl font-bold">住宅ローンシミュレータ</h1>
+        <p class="text-sm mt-2 opacity-80">ボーナス回数・金額指定 対応版</p>
+    </div>
+
+    <div class="p-6 md:p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        <!-- 左側：入力フォーム -->
+        <div class="space-y-6">
+            <h2 class="text-xl font-semibold text-gray-800 border-b pb-2">借入条件の入力</h2>
+            
+            <div class="space-y-4">
+                <!-- 借入金額と借入開始年月 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">借入金額</label>
+                        <div class="relative">
+                            <input type="number" id="principal" value="30000000" step="100000" class="w-full border border-gray-300 rounded-lg py-2 pl-3 pr-10 focus:ring-blue-500 focus:border-blue-500 text-right text-lg">
+                            <span class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500">円</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">借入開始年月</label>
+                        <input type="month" id="startDate" class="w-full border border-gray-300 rounded-lg py-2 px-3 focus:ring-blue-500 focus:border-blue-500 text-lg bg-white h-[46px]">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <!-- 金利 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">金利 (年利)</label>
+                        <div class="relative">
+                            <input type="number" id="rate" value="1.5" step="0.1" class="w-full border border-gray-300 rounded-lg py-2 pl-3 pr-8 focus:ring-blue-500 focus:border-blue-500 text-right text-lg">
+                            <span class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500">%</span>
+                        </div>
+                    </div>
+                    <!-- 返済期間 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">返済期間</label>
+                        <div class="relative">
+                            <input type="number" id="years" value="35" class="w-full border border-gray-300 rounded-lg py-2 pl-3 pr-8 focus:ring-blue-500 focus:border-blue-500 text-right text-lg">
+                            <span class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500">年</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ボーナス設定区画 -->
+                <div class="bg-blue-50 p-4 rounded-lg border border-blue-100 mt-6">
+                    <h3 class="text-md font-medium text-blue-800 mb-3">ボーナス返済の設定</h3>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ボーナス1回あたりの加算額</label>
+                        <div class="relative mb-4">
+                            <input type="number" id="bonusAmount" value="200000" step="10000" class="w-full border border-gray-300 rounded-lg py-2 pl-3 pr-10 focus:ring-blue-500 focus:border-blue-500 text-right text-lg bg-white">
+                            <span class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500">円</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">ボーナス支払月 (複数選択可)</label>
+                        <div class="grid grid-cols-6 gap-2" id="bonusMonthsContainer">
+                            <!-- JSでチェックボックスを生成 -->
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2 text-right">年間ボーナス回数: <span id="bonusCountDisplay" class="font-bold text-blue-600">2</span> 回</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右側：計算結果とグラフ -->
+        <div class="bg-gray-50 p-6 rounded-xl border border-gray-200 flex flex-col h-full">
+            <h2 class="text-xl font-semibold text-gray-800 border-b pb-2 mb-6">シミュレーション結果</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                    <p class="text-sm text-gray-500">毎月の返済額</p>
+                    <p class="text-2xl font-bold text-gray-800 text-right"><span id="resultMonthly">0</span> <span class="text-base font-normal">円</span></p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+                    <p class="text-sm text-gray-500">ボーナス月の返済額 <br><span class="text-xs">(毎月分 + ボーナス分)</span></p>
+                    <p class="text-2xl font-bold text-gray-800 text-right"><span id="resultBonusMonthTotal">0</span> <span class="text-base font-normal">円</span></p>
+                </div>
+            </div>
+
+            <div class="space-y-3 mb-8 bg-white p-4 rounded-lg border border-gray-100 text-sm">
+                <div class="flex justify-between items-center border-b pb-2">
+                    <span class="text-gray-600">総支払額</span>
+                    <span class="text-lg font-bold text-gray-800"><span id="resultTotalPay">0</span> 円</span>
+                </div>
+                <div class="flex justify-between items-center border-b pb-2">
+                    <span class="text-gray-600">うち 元金（借入額）</span>
+                    <span class="text-gray-800"><span id="resultPrincipal">0</span> 円</span>
+                </div>
+                <div class="flex justify-between items-center text-red-600">
+                    <span>うち 総支払利息</span>
+                    <span class="font-bold"><span id="resultInterest">0</span> 円</span>
+                </div>
+            </div>
+
+            <!-- 円グラフ -->
+            <div class="flex-grow flex items-center justify-center relative w-full h-48 md:h-auto min-h-[200px]">
+                <canvas id="resultChart"></canvas>
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- 返済予定表 -->
+    <div class="p-6 md:p-8 border-t border-gray-200 bg-white">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+            <svg class="w-6 h-6 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            完済までの返済予定表（償還表）
+        </h2>
+        <div class="max-h-[500px] overflow-y-auto border border-gray-200 rounded-lg shadow-inner bg-gray-50 relative">
+            <table class="w-full text-sm text-left text-gray-600 whitespace-nowrap">
+                <thead class="text-xs text-gray-700 uppercase bg-gray-200 sticky top-0 z-10 shadow-sm">
+                    <tr>
+                        <th class="py-3 px-4 text-center w-16">回数</th>
+                        <th class="py-3 px-4 text-center w-24">年月</th>
+                        <th class="py-3 px-4 text-right">返済額</th>
+                        <th class="py-3 px-4 text-right">うち元金</th>
+                        <th class="py-3 px-4 text-right">うち利息</th>
+                        <th class="py-3 px-4 text-right text-gray-900">残高</th>
+                    </tr>
+                </thead>
+                <tbody id="scheduleBody" class="bg-white">
+                    <!-- JSで生成 -->
+                </tbody>
+            </table>
+        </div>
+        <p class="text-xs text-gray-500 mt-3">※借入開始年月を基準に計算しています。実際の契約時の端数処理（切り捨て・四捨五入など）により、金融機関の提示する結果と数十円〜数百円程度の誤差が生じる場合があります。</p>
+    </div>
+</div>
+
+<script>
+    // --- 1. 初期設定 ---
+    const inputs = {
+        principal: document.getElementById('principal'),
+        rate: document.getElementById('rate'),
+        years: document.getElementById('years'),
+        bonusAmount: document.getElementById('bonusAmount'),
+        startDate: document.getElementById('startDate')
+    };
+
+    // --- 今月の年月を初期値にセット ---
+    const today = new Date();
+    const currentY = today.getFullYear();
+    const currentM = String(today.getMonth() + 1).padStart(2, '0');
+    inputs.startDate.value = `${currentY}-${currentM}`;
+
+    const displays = {
+        bonusCount: document.getElementById('bonusCountDisplay'),
+        monthly: document.getElementById('resultMonthly'),
+        bonusMonthTotal: document.getElementById('resultBonusMonthTotal'),
+        totalPay: document.getElementById('resultTotalPay'),
+        principal: document.getElementById('resultPrincipal'),
+        interest: document.getElementById('resultInterest')
+    };
+
+    let chartInstance = null;
+
+    // --- 2. ボーナス月のチェックボックス生成 ---
+    const monthsContainer = document.getElementById('bonusMonthsContainer');
+    const defaultMonths = [6, 12]; // 初期選択状態（6月、12月）
+
+    for (let i = 1; i <= 12; i++) {
+        const wrapper = document.createElement('div');
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = `month-${i}`;
+        checkbox.value = i;
+        checkbox.className = 'month-checkbox hidden';
+        if (defaultMonths.includes(i)) checkbox.checked = true;
+
+        const label = document.createElement('label');
+        label.htmlFor = `month-${i}`;
+        label.className = 'block text-center text-sm py-1 border border-gray-300 rounded cursor-pointer transition-colors duration-200 bg-white text-gray-700 hover:bg-gray-50';
+        label.textContent = `${i}月`;
+
+        wrapper.appendChild(checkbox);
+        wrapper.appendChild(label);
+        monthsContainer.appendChild(wrapper);
+
+        // チェックボックス変更時に再計算
+        checkbox.addEventListener('change', calculate);
+    }
+
+    // --- 3. 計算ロジック ---
+    function calculate() {
+        // 入力値の取得
+        const P = Number(inputs.principal.value) || 0;
+        const r_annual = Number(inputs.rate.value) || 0;
+        const years = Number(inputs.years.value) || 0;
+        const bonusPerTime = Number(inputs.bonusAmount.value) || 0;
+        
+        let startYear = today.getFullYear();
+        let startMonth = today.getMonth() + 1;
+        if (inputs.startDate.value) {
+            const parts = inputs.startDate.value.split('-');
+            startYear = parseInt(parts[0], 10);
+            startMonth = parseInt(parts[1], 10);
+        }
+
+        // 選択されたボーナス月数をカウント
+        const checkedMonths = document.querySelectorAll('.month-checkbox:checked');
+        const bonusCountPerYear = checkedMonths.length;
+        const checkedMonthValues = Array.from(checkedMonths).map(cb => parseInt(cb.value));
+        displays.bonusCount.textContent = bonusCountPerYear;
+
+        // 計算用の変数
+        let monthlyPayment = 0;
+        let totalBonusPayment = 0;
+        let totalPayment = 0;
+        let totalInterest = 0;
+        let bonusPrincipal = 0; // ボーナス返済が負担する元金部分
+
+        if (P > 0 && years > 0) {
+            // ① ボーナス分の元金を逆算する
+            if (bonusCountPerYear > 0 && bonusPerTime > 0) {
+                if (r_annual === 0) {
+                    bonusPrincipal = bonusPerTime * years * bonusCountPerYear;
+                } else {
+                    const r_bonus = (r_annual / 100) / bonusCountPerYear;
+                    const n_bonus = years * bonusCountPerYear;
+                    // PMT関数からPV（現在価値＝元金）を逆算する式
+                    bonusPrincipal = bonusPerTime * (1 - Math.pow(1 + r_bonus, -n_bonus)) / r_bonus;
+                }
+            }
+
+            // ボーナス分元金が借入額を上回る設定の場合は調整（エラー回避）
+            if (bonusPrincipal > P) {
+                bonusPrincipal = P; 
+                // ※実際には「ボーナス設定が高すぎます」等の警告を出すのが親切です
+            }
+
+            // ② 毎月返済用の元金
+            const monthlyPrincipal = P - bonusPrincipal;
+
+            // ③ 毎月返済額の計算
+            if (monthlyPrincipal > 0) {
+                if (r_annual === 0) {
+                    monthlyPayment = monthlyPrincipal / (years * 12);
+                } else {
+                    const r_monthly = (r_annual / 100) / 12;
+                    const n_monthly = years * 12;
+                    monthlyPayment = (monthlyPrincipal * r_monthly * Math.pow(1 + r_monthly, n_monthly)) / (Math.pow(1 + r_monthly, n_monthly) - 1);
+                }
+            }
+            monthlyPayment = Math.round(monthlyPayment);
+
+            // ④ 総支払額と利息の計算
+            const totalMonthlyPayments = monthlyPayment * years * 12;
+            const totalBonusPayments = bonusPerTime * years * bonusCountPerYear;
+            
+            totalPayment = totalMonthlyPayments + totalBonusPayments;
+            totalInterest = totalPayment - P;
+            
+            // マイナスにならないよう補正
+            if(totalInterest < 0) totalInterest = 0;
+        }
+
+        // --- 返済予定表の生成と正確な合計の再計算 ---
+        let scheduleHtml = '';
+        let totalPaymentAcc = 0;
+        let totalInterestAcc = 0;
+
+        if (P > 0 && years > 0) {
+            let balanceM = P - bonusPrincipal;
+            let balanceB = bonusPrincipal;
+            let currentMonthlyPayment = monthlyPayment;
+            let currentBonusPayment = bonusPerTime;
+
+            const r_monthly = r_annual === 0 ? 0 : (r_annual / 100) / 12;
+            const r_bonus = (r_annual === 0 || bonusCountPerYear === 0) ? 0 : (r_annual / 100) / bonusCountPerYear;
+
+            for(let i = 1; i <= years * 12; i++) {
+                let currentMonthIndex = startMonth - 1 + i - 1;
+                let currentYear = startYear + Math.floor(currentMonthIndex / 12);
+                let monthOfYr = (currentMonthIndex % 12) + 1;
+
+                let isBonus = checkedMonthValues.includes(monthOfYr);
+
+                // 毎月分の利息と元金充当
+                let interestM = 0, principalM = 0, paymentM = 0;
+                if (balanceM > 0) {
+                    interestM = Math.round(balanceM * r_monthly);
+                    paymentM = currentMonthlyPayment;
+                    principalM = paymentM - interestM;
+                    
+                    // 最終回の端数調整
+                    if (balanceM < principalM || i === years * 12) {
+                        principalM = balanceM;
+                        paymentM = principalM + interestM;
+                    }
+                    balanceM -= principalM;
+                }
+
+                // ボーナス分の利息と元金充当
+                let interestB = 0, principalB = 0, paymentB = 0;
+                if (isBonus && balanceB > 0) {
+                    interestB = Math.round(balanceB * r_bonus);
+                    paymentB = currentBonusPayment;
+                    principalB = paymentB - interestB;
+                    
+                    // 最終回の端数調整
+                    if (balanceB < principalB || (balanceB <= principalB * 1.01)) {
+                        principalB = balanceB;
+                        paymentB = principalB + interestB;
+                    }
+                    balanceB -= principalB;
+                }
+
+                // マイナス残高補正
+                if (balanceM < 0) balanceM = 0;
+                if (balanceB < 0) balanceB = 0;
+
+                let totalPaymentMonth = paymentM + paymentB;
+                let totalPrincipalMonth = principalM + principalB;
+                let totalInterestMonth = interestM + interestB;
+                let totalBalance = Math.round(balanceM + balanceB);
+
+                totalPaymentAcc += totalPaymentMonth;
+                totalInterestAcc += totalInterestMonth;
+
+                // 表の行を作成
+                scheduleHtml += `
+                    <tr class="border-b border-gray-100 hover:bg-blue-50 transition-colors">
+                        <td class="py-2 px-4 text-center text-gray-500">${i}</td>
+                        <td class="py-2 px-4 text-center">${currentYear}年${monthOfYr}月</td>
+                        <td class="py-2 px-4 text-right font-medium text-gray-800">${totalPaymentMonth.toLocaleString()} <span class="text-xs text-gray-400 font-normal">円</span></td>
+                        <td class="py-2 px-4 text-right text-gray-600">${totalPrincipalMonth.toLocaleString()} <span class="text-xs text-gray-400">円</span></td>
+                        <td class="py-2 px-4 text-right text-gray-600">${totalInterestMonth.toLocaleString()} <span class="text-xs text-gray-400">円</span></td>
+                        <td class="py-2 px-4 text-right font-bold text-gray-900">${totalBalance.toLocaleString()} <span class="text-xs text-gray-400 font-normal">円</span></td>
+                    </tr>
+                `;
+                
+                // 残高がなくなったらループ終了
+                if (totalBalance <= 0) break;
+            }
+        } else {
+            scheduleHtml = `<tr><td colspan="6" class="py-8 text-center text-gray-500">条件を入力してください</td></tr>`;
+        }
+
+        document.getElementById('scheduleBody').innerHTML = scheduleHtml;
+
+        // 表の合計値から、正確な総支払額と利息を上書き（丸め誤差によるズレをなくすため）
+        if (P > 0 && years > 0) {
+            totalPayment = totalPaymentAcc;
+            totalInterest = totalInterestAcc;
+        }
+
+        // --- 4. 結果の表示更新 ---
+        displays.monthly.textContent = monthlyPayment.toLocaleString();
+        displays.bonusMonthTotal.textContent = (monthlyPayment + (bonusCountPerYear > 0 ? bonusPerTime : 0)).toLocaleString();
+        displays.totalPay.textContent = totalPayment.toLocaleString();
+        displays.principal.textContent = P.toLocaleString();
+        displays.interest.textContent = totalInterest.toLocaleString();
+
+        // --- 5. グラフの更新 ---
+        updateChart(P, totalInterest);
+    }
+
+    // --- 6. グラフ描画処理 (Chart.js) ---
+    function updateChart(principal, interest) {
+        const ctx = document.getElementById('resultChart').getContext('2d');
+        
+        // データが0の場合はグラフをグレーに
+        const hasData = (principal + interest) > 0;
+        const dataValues = hasData ? [principal, interest] : [1, 0];
+        const bgColors = hasData ? ['#3b82f6', '#ef4444'] : ['#e5e7eb', '#ffffff']; // Tailwind blue-500, red-500
+        const labels = hasData ? ['元金', '総支払利息'] : ['データ未入力', ''];
+
+        if (chartInstance) {
+            chartInstance.data.datasets[0].data = dataValues;
+            chartInstance.data.datasets[0].backgroundColor = bgColors;
+            chartInstance.data.labels = labels;
+            chartInstance.update();
+        } else {
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: dataValues,
+                        backgroundColor: bgColors,
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                font: { family: "'Noto Sans JP', sans-serif" }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    if(!hasData) return ' データを入力してください';
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += context.parsed.toLocaleString() + ' 円';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    // --- 7. イベントリスナーの設定 ---
+    // 入力項目が変わるたびに計算を実行
+    Object.values(inputs).forEach(input => {
+        input.addEventListener('input', calculate);
+    });
+
+    // 初期計算の実行
+    calculate();
+
+</script>
+</body>
+</html>
